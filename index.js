@@ -2,8 +2,8 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
-    CallToolRequestSchema,
-    ListToolsRequestSchema,
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from "fs";
 import path from "path";
@@ -178,72 +178,72 @@ function getAllFiles(dirPath, filesList = []) {
 }
 
 const server = new Server(
-    {
-        name: "mcp-guard",
-        version: "1.0.0",
+  {
+    name: "mcp-project-guard",
+    version: "1.0.2",
+  },
+  {
+    capabilities: {
+      tools: {},
     },
-    {
-        capabilities: {
-            tools: {},
-        },
-    }
+  }
 );
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
-    return {
-        tools: [
-            {
-                name: "project_guard",
-                description: "Analyze project architecture and return validation rules",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        path: {
-                            type: "string",
-                            description: "Project path to analyze",
-                            default: process.cwd()
-                        }
-                    }
-                }
+  return {
+    tools: [
+      {
+        name: "project_guard",
+        description: "Analyze project architecture and return validation rules",
+        inputSchema: {
+          type: "object",
+          properties: {
+            path: {
+              type: "string",
+              description: "Project path to analyze",
+              default: process.cwd()
             }
-        ]
-    };
+          }
+        }
+      }
+    ]
+  };
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params;
+  const { name, arguments: args } = request.params;
+  
+  if (name === "project_guard") {
+    const projectPath = args?.path || process.cwd();
+    const architecture = analyzeArchitecture(projectPath);
 
-    if (name === "project_guard") {
-        const projectPath = args?.path || process.cwd();
-        const architecture = analyzeArchitecture(projectPath);
-
-        return {
-            content: [
-                {
-                    type: "text",
-                    text: JSON.stringify({
-                        summary: architecture,
-                        instructions: `You must generate code following these rules:
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            summary: architecture,
+            instructions: `You must generate code following these rules:
     - Use only layers: ${architecture.layers.join(", ")}
     - Respect folder structure: ${architecture.folderPattern.join(", ")}
     - Do not create files outside these folders
     - Language: ${architecture.allowedLanguages.join(", ")}
     - Follow conventions already present in the existing code.`
-                    }, null, 2)
-                }
-            ]
-        };
-    }
-
-    throw new Error(`Unknown tool: ${name}`);
+          }, null, 2)
+        }
+      ]
+    };
+  }
+  
+  throw new Error(`Unknown tool: ${name}`);
 });
 
 async function main() {
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
 }
 
 main().catch((error) => {
-    console.error("Server error:", error);
-    process.exit(1);
+  console.error("Server error:", error);
+  process.exit(1);
 });

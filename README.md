@@ -16,15 +16,13 @@ Adicione ao seu `settings.json` (`Ctrl+Shift+P` → "Open User Settings (JSON)")
 {
     "github.copilot.chat.welcomeMessage": "disabled",
     "github.copilot.chat.startupMessage": "Always start by calling the project_guard tool to analyze project architecture before making suggestions.",
-    "github.copilot.chat.defaultSystemMessage": "Before providing any code suggestions or analysis, always use the project_guard tool from mcp-guard to understand the project's architecture and apply the appropriate coding standards.",    "mcp": {
-        "autoStart": true,
+    "github.copilot.chat.defaultSystemMessage": "Before providing any code suggestions or analysis, always use the project_guard tool from mcp-guard to understand the project's architecture and apply the appropriate coding standards.",
+    "mcp": {
         "servers": {
             "mcp-project-guard": {
                 "command": "npx",
                 "args": ["mcp-project-guard"],
-                "env": {},
-                "enabled": true,
-                "autoStart": true
+                "env": {}
             }
         }
     }
