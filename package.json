@@ -1,0 +1,47 @@
+{
+  "name": "mcp-guard",
+  "version": "1.0.0",
+  "description": "MCP server for project architecture validation across multiple programming languages",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "mcp-guard": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "test": "node index.js --version"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "mcp", 
+    "server", 
+    "architecture", 
+    "validation",
+    "code-quality",
+    "multi-language",
+    "project-structure",
+    "clean-architecture",
+    "copilot",
+    "claude"
+  ],
+  "author": "Bruno",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/seu-usuario/mcp-guard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/seu-usuario/mcp-guard/issues"
+  },
+  "homepage": "https://github.com/seu-usuario/mcp-guard#readme",
+  "files": [
+    "index.js",
+    "README.md"
+  ]
+}
