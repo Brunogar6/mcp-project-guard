@@ -2,8 +2,8 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
+    CallToolRequestSchema,
+    ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from "fs";
 import path from "path";
@@ -11,7 +11,7 @@ import path from "path";
 function analyzeArchitecture(projectPath) {
     const detectedLanguage = detectProjectLanguage(projectPath);
     const commonLayers = ["domain", "application", "infrastructure"];
-    
+
     // Language-specific configurations
     const languageConfigs = {
         javascript: {
@@ -85,7 +85,7 @@ function detectProjectLanguage(projectPath) {
     try {
         // Check for specific config files
         const files = fs.readdirSync(projectPath);
-        
+
         // JavaScript/TypeScript detection
         if (files.includes('package.json')) {
             const packageJson = JSON.parse(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf8'));
@@ -94,50 +94,50 @@ function detectProjectLanguage(projectPath) {
             }
             return 'javascript';
         }
-        
+
         // Python detection
         if (files.some(f => ['requirements.txt', 'pyproject.toml', 'setup.py', 'poetry.lock'].includes(f))) {
             return 'python';
         }
-        
+
         // Java detection
         if (files.some(f => ['pom.xml', 'build.gradle'].includes(f))) {
             return 'java';
         }
-        
+
         // C# detection
         if (files.some(f => f.endsWith('.csproj') || f.endsWith('.sln'))) {
             return 'csharp';
         }
-        
+
         // Go detection
         if (files.includes('go.mod')) {
             return 'go';
         }
-        
+
         // Rust detection
         if (files.includes('Cargo.toml')) {
             return 'rust';
         }
-        
+
         // PHP detection
         if (files.includes('composer.json')) {
             return 'php';
         }
-        
+
         // Fallback: detect by file extensions
         const allFiles = getAllFiles(projectPath);
         const extensions = allFiles.map(f => path.extname(f).toLowerCase());
-        
+
         const extensionCounts = {};
         extensions.forEach(ext => {
             extensionCounts[ext] = (extensionCounts[ext] || 0) + 1;
         });
-        
-        const mostCommonExt = Object.keys(extensionCounts).reduce((a, b) => 
+
+        const mostCommonExt = Object.keys(extensionCounts).reduce((a, b) =>
             extensionCounts[a] > extensionCounts[b] ? a : b, ''
         );
-        
+
         const extensionToLanguage = {
             '.js': 'javascript',
             '.mjs': 'javascript',
@@ -150,9 +150,9 @@ function detectProjectLanguage(projectPath) {
             '.rs': 'rust',
             '.php': 'php'
         };
-        
+
         return extensionToLanguage[mostCommonExt] || 'unknown';
-        
+
     } catch (error) {
         return 'unknown';
     }
@@ -178,72 +178,72 @@ function getAllFiles(dirPath, filesList = []) {
 }
 
 const server = new Server(
-  {
-    name: "mcp-guard",
-    version: "1.0.0",
-  },
-  {
-    capabilities: {
-      tools: {},
+    {
+        name: "mcp-guard",
+        version: "1.0.0",
     },
-  }
+    {
+        capabilities: {
+            tools: {},
+        },
+    }
 );
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: [
-      {
-        name: "project_guard",
-        description: "Analyze project architecture and return validation rules",
-        inputSchema: {
-          type: "object",
-          properties: {
-            path: {
-              type: "string",
-              description: "Project path to analyze",
-              default: process.cwd()
+    return {
+        tools: [
+            {
+                name: "project_guard",
+                description: "Analyze project architecture and return validation rules",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        path: {
+                            type: "string",
+                            description: "Project path to analyze",
+                            default: process.cwd()
+                        }
+                    }
+                }
             }
-          }
-        }
-      }
-    ]
-  };
+        ]
+    };
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-  
-  if (name === "project_guard") {
-    const projectPath = args?.path || process.cwd();
-    const architecture = analyzeArchitecture(projectPath);
+    const { name, arguments: args } = request.params;
 
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify({
-            summary: architecture,
-            instructions: `You must generate code following these rules:
+    if (name === "project_guard") {
+        const projectPath = args?.path || process.cwd();
+        const architecture = analyzeArchitecture(projectPath);
+
+        return {
+            content: [
+                {
+                    type: "text",
+                    text: JSON.stringify({
+                        summary: architecture,
+                        instructions: `You must generate code following these rules:
     - Use only layers: ${architecture.layers.join(", ")}
     - Respect folder structure: ${architecture.folderPattern.join(", ")}
     - Do not create files outside these folders
     - Language: ${architecture.allowedLanguages.join(", ")}
     - Follow conventions already present in the existing code.`
-          }, null, 2)
-        }
-      ]
-    };
-  }
-  
-  throw new Error(`Unknown tool: ${name}`);
+                    }, null, 2)
+                }
+            ]
+        };
+    }
+
+    throw new Error(`Unknown tool: ${name}`);
 });
 
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
 }
 
 main().catch((error) => {
-  console.error("Server error:", error);
-  process.exit(1);
+    console.error("Server error:", error);
+    process.exit(1);
 });

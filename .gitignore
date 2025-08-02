@@ -92,6 +92,3 @@ test/
 tests/
 *.test.js
 *.spec.js
-
-# Context7 config (not needed for distribution)
-.context7.json
