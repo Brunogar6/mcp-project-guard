@@ -8,11 +8,190 @@ import {
 import fs from "fs";
 import path from "path";
 
+function analyzeExistingPatterns(projectPath) {
+    const patterns = {
+        components: [],
+        hooks: [],
+        services: [],
+        utils: [],
+        patterns: [],
+        imports: [],
+        exports: []
+    };
+
+    try {
+        const allFiles = getAllFiles(projectPath);
+        const codeFiles = allFiles.filter(file => {
+            const ext = path.extname(file).toLowerCase();
+            return ['.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cs', '.go', '.rs', '.php'].includes(ext);
+        });
+
+        codeFiles.forEach(filePath => {
+            try {
+                const content = fs.readFileSync(filePath, 'utf8');
+                const relativePath = path.relative(projectPath, filePath);
+                
+                const componentMatches = content.match(/(?:class|function|const)\s+([A-Z][a-zA-Z0-9]*)/g);
+                if (componentMatches) {
+                    componentMatches.forEach(match => {
+                        const name = match.split(/\s+/)[1];
+                        patterns.components.push({
+                            name,
+                            file: relativePath,
+                            type: detectComponentType(content, name)
+                        });
+                    });
+                }
+
+                const hookMatches = content.match(/(?:use[A-Z][a-zA-Z0-9]*|on[A-Z][a-zA-Z0-9]*)/g);
+                if (hookMatches) {
+                    hookMatches.forEach(hook => {
+                        patterns.hooks.push({
+                            name: hook,
+                            file: relativePath
+                        });
+                    });
+                }
+
+                const importMatches = content.match(/import\s+.*?from\s+['"]([^'"]+)['"]/g);
+                if (importMatches) {
+                    importMatches.forEach(imp => {
+                        const module = imp.match(/from\s+['"]([^'"]+)['"]/)?.[1];
+                        if (module && !module.startsWith('.')) {
+                            patterns.imports.push({
+                                module,
+                                file: relativePath,
+                                statement: imp
+                            });
+                        }
+                    });
+                }
+
+                detectSpecificPatterns(content, relativePath, patterns);
+
+            } catch (error) {
+                
+            }
+        });
+
+    } catch (error) {
+        
+    }
+
+    return patterns;
+}
+
+function detectComponentType(content, componentName) {
+    const lowerContent = content.toLowerCase();
+    const lowerName = componentName.toLowerCase();
+    
+    if (lowerName.includes('modal') || lowerContent.includes('modal')) return 'modal';
+    if (lowerName.includes('button') || lowerContent.includes('onclick')) return 'button';
+    if (lowerName.includes('form') || lowerContent.includes('onsubmit')) return 'form';
+    if (lowerName.includes('table') || lowerContent.includes('thead')) return 'table';
+    if (lowerName.includes('card') || lowerContent.includes('card')) return 'card';
+    if (lowerName.includes('header') || lowerContent.includes('nav')) return 'header';
+    if (lowerName.includes('footer')) return 'footer';
+    if (lowerName.includes('sidebar')) return 'sidebar';
+    if (lowerName.includes('service') || lowerContent.includes('api')) return 'service';
+    if (lowerName.includes('hook') || lowerName.startsWith('use')) return 'hook';
+    
+    return 'component';
+}
+
+function detectSpecificPatterns(content, filePath, patterns) {
+    if (content.includes('useState') || content.includes('setState')) {
+        patterns.patterns.push({
+            type: 'state-management',
+            pattern: 'React State',
+            file: filePath,
+            example: content.match(/const\s+\[[^\]]+\]\s*=\s*useState[^;]+;?/)?.[0]
+        });
+    }
+
+    if (content.includes('fetch') || content.includes('axios') || content.includes('api')) {
+        patterns.patterns.push({
+            type: 'api-call',
+            pattern: 'API Integration',
+            file: filePath,
+            example: content.match(/(fetch|axios)\([^)]+\)/)?.[0]
+        });
+    }
+
+    if (content.includes('styled') || content.includes('className') || content.includes('css')) {
+        patterns.patterns.push({
+            type: 'styling',
+            pattern: 'Component Styling',
+            file: filePath
+        });
+    }
+
+    if (content.includes('validate') || content.includes('schema') || content.includes('yup') || content.includes('joi')) {
+        patterns.patterns.push({
+            type: 'validation',
+            pattern: 'Form Validation',
+            file: filePath
+        });
+    }
+}
+
+function generatePatternGuidance(patterns, requestedComponent = 'component') {
+    let guidance = '\n\n=== EXISTING PATTERNS IN PROJECT ===\n';
+    
+    const similarComponents = patterns.components.filter(comp => 
+        comp.type === requestedComponent || 
+        comp.name.toLowerCase().includes(requestedComponent.toLowerCase())
+    );
+
+    if (similarComponents.length > 0) {
+        guidance += `\nSIMILAR COMPONENTS FOUND:\n`;
+        similarComponents.forEach(comp => {
+            guidance += `- ${comp.name} (${comp.type}) in ${comp.file}\n`;
+        });
+        guidance += `\n=> Follow the same pattern as these existing components!\n`;
+    }
+
+    const commonImports = {};
+    patterns.imports.forEach(imp => {
+        commonImports[imp.module] = (commonImports[imp.module] || 0) + 1;
+    });
+    
+    const topImports = Object.entries(commonImports)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5);
+
+    if (topImports.length > 0) {
+        guidance += `\nCOMMON IMPORTS IN PROJECT:\n`;
+        topImports.forEach(([module, count]) => {
+            guidance += `- ${module} (used ${count} times)\n`;
+        });
+    }
+
+    const patternTypes = {};
+    patterns.patterns.forEach(p => {
+        if (!patternTypes[p.type]) patternTypes[p.type] = [];
+        patternTypes[p.type].push(p);
+    });
+
+    Object.entries(patternTypes).forEach(([type, typePatterns]) => {
+        guidance += `\n${type.toUpperCase()} PATTERNS:\n`;
+        typePatterns.slice(0, 3).forEach(p => {
+            guidance += `- ${p.pattern} in ${p.file}\n`;
+            if (p.example) {
+                guidance += `  Example: ${p.example}\n`;
+            }
+        });
+    });
+
+    return guidance;
+}
+
 function analyzeArchitecture(projectPath) {
     const detectedLanguage = detectProjectLanguage(projectPath);
     const commonLayers = ["domain", "application", "infrastructure"];
+    
+    const existingPatterns = analyzeExistingPatterns(projectPath);
 
-    // Language-specific configurations
     const languageConfigs = {
         javascript: {
             layers: commonLayers,
@@ -77,16 +256,15 @@ function analyzeArchitecture(projectPath) {
         folderPattern: config.folderPattern,
         fileExtensions: config.fileExtensions,
         configFiles: config.configFiles,
-        allowedLanguages: [detectedLanguage]
+        allowedLanguages: [detectedLanguage],
+        existingPatterns
     };
 }
 
 function detectProjectLanguage(projectPath) {
     try {
-        // Check for specific config files
         const files = fs.readdirSync(projectPath);
 
-        // JavaScript/TypeScript detection
         if (files.includes('package.json')) {
             const packageJson = JSON.parse(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf8'));
             if (packageJson.devDependencies?.typescript || packageJson.dependencies?.typescript || files.includes('tsconfig.json')) {
@@ -95,37 +273,30 @@ function detectProjectLanguage(projectPath) {
             return 'javascript';
         }
 
-        // Python detection
         if (files.some(f => ['requirements.txt', 'pyproject.toml', 'setup.py', 'poetry.lock'].includes(f))) {
             return 'python';
         }
 
-        // Java detection
         if (files.some(f => ['pom.xml', 'build.gradle'].includes(f))) {
             return 'java';
         }
 
-        // C# detection
         if (files.some(f => f.endsWith('.csproj') || f.endsWith('.sln'))) {
             return 'csharp';
         }
 
-        // Go detection
         if (files.includes('go.mod')) {
             return 'go';
         }
 
-        // Rust detection
         if (files.includes('Cargo.toml')) {
             return 'rust';
         }
 
-        // PHP detection
         if (files.includes('composer.json')) {
             return 'php';
         }
 
-        // Fallback: detect by file extensions
         const allFiles = getAllFiles(projectPath);
         const extensions = allFiles.map(f => path.extname(f).toLowerCase());
 
@@ -172,7 +343,7 @@ function getAllFiles(dirPath, filesList = []) {
             }
         });
     } catch (error) {
-        // Ignore errors for inaccessible directories
+        
     }
     return filesList;
 }
@@ -180,7 +351,7 @@ function getAllFiles(dirPath, filesList = []) {
 const server = new Server(
   {
     name: "mcp-project-guard",
-    version: "1.0.2",
+    version: "1.0.3",
   },
   {
     capabilities: {
@@ -215,7 +386,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   
   if (name === "project_guard") {
     const projectPath = args?.path || process.cwd();
+    const requestedComponent = args?.component || 'component';
     const architecture = analyzeArchitecture(projectPath);
+    
+    const patternGuidance = generatePatternGuidance(architecture.existingPatterns, requestedComponent);
 
     return {
       content: [
@@ -228,7 +402,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     - Respect folder structure: ${architecture.folderPattern.join(", ")}
     - Do not create files outside these folders
     - Language: ${architecture.allowedLanguages.join(", ")}
-    - Follow conventions already present in the existing code.`
+    - Follow conventions already present in the existing code.
+    
+    IMPORTANT: Always look for similar existing components before creating new ones!
+    ${patternGuidance}
+    
+    => Before creating anything new, check if there are similar patterns in the project and follow the same approach!`
           }, null, 2)
         }
       ]
