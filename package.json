@@ -1,6 +1,6 @@
 {
     "name": "mcp-project-guard",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "description": "MCP server for project architecture validation across multiple programming languages",
     "type": "module",
     "main": "index.js",
@@ -34,12 +34,12 @@
     "license": "MIT",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/seu-usuario/mcp-project-guard.git"
+        "url": "git+https://github.com/brunogar6/mcp-project-guard.git"
     },
     "bugs": {
-        "url": "https://github.com/seu-usuario/mcp-project-guard/issues"
+        "url": "https://github.com/brunogar6/mcp-project-guard/issues"
     },
-    "homepage": "https://github.com/seu-usuario/mcp-project-guard#readme",
+    "homepage": "https://github.com/brunogar6/mcp-project-guard#readme",
     "files": [
         "index.js",
         "README.md"

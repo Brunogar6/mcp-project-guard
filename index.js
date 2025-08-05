@@ -377,7 +377,7 @@ function getAllFiles(dirPath, filesList = []) {
 const server = new Server(
     {
         name: "mcp-project-guard",
-        version: "1.1.0",
+        version: "1.1.1",
     },
     {
         capabilities: {
