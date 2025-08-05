@@ -1,6 +1,6 @@
 # MCP Project Guard
 
-🛡️ Servidor MCP que analisa automaticamente a arquitetura do seu projeto e define regras de validação para diferentes linguagens de programação.
+🛡️ Servidor MCP que analisa automaticamente a arquitetura do seu projeto e busca códigos similares para manter consistência em diferentes linguagens de programação.
 
 ## 🚀 Instalação
 
@@ -15,9 +15,7 @@ Adicione ao seu `settings.json` (`Ctrl+Shift+P` → "Open User Settings (JSON)")
 ```json
 {
     "github.copilot.chat.welcomeMessage": "disabled",
-    "github.copilot.chat.startupMessage": "MANDATORY: Always start by calling the project_guard tool from mcp-project-guard to analyze project architecture before making any suggestions. This tool provides essential project context and coding standards.",
-    "github.copilot.chat.defaultSystemMessage": "CRITICAL INSTRUCTION: Before providing any code suggestions, analysis, or assistance, you MUST first call the project_guard tool from the mcp-project-guard MCP server. This tool analyzes the project architecture, detects the programming language, identifies existing patterns, and provides specific coding standards. Use this information to ensure all suggestions follow the project's established patterns and architecture. Never skip this step - it's mandatory for maintaining code consistency.",
-    "github.copilot.chat.systemPrompt": "You are an AI assistant that ALWAYS uses the project_guard tool from mcp-project-guard before providing any code-related assistance. This tool is essential for understanding project structure, existing patterns, and architectural guidelines. Make it your first action in every conversation about code.",
+    "github.copilot.chat.startupMessage": "Use the MCP Project Guard tools to analyze architecture and find similar code patterns.",
     "mcp": {
         "servers": {
             "mcp-project-guard": {
@@ -30,55 +28,61 @@ Adicione ao seu `settings.json` (`Ctrl+Shift+P` → "Open User Settings (JSON)")
 }
 ```
 
-## 🎯 Como funciona
+## 🛠️ Tools Disponíveis
 
-1. **Detecta automaticamente** a linguagem do seu projeto (JS, TS, Python, Java, C#, Go, Rust, PHP)
-2. **Define regras arquiteturais** específicas para cada linguagem
-3. **Analisa padrões existentes** no seu código (componentes, hooks, services, etc.)
-4. **Orienta o GitHub Copilot** a reutilizar padrões já existentes no projeto
+### 1. `analyze_architecture`
+Analisa a arquitetura geral do projeto:
+- Detecta linguagem de programação
+- Define regras e camadas arquiteturais  
+- Conta componentes existentes
+- Retorna estrutura de pastas recomendada
 
-## 🔍 Análise de Padrões
+### 2. `find_similar_code`
+Busca códigos similares no projeto:
+- Encontra componentes similares por tipo
+- Extrai trechos de código relevantes
+- Identifica padrões e imports usados
+- Sugere reutilização de código existente
 
-O MCP Project Guard analisa seu projeto e identifica:
+## 🎯 Como usar no GitHub Copilot
 
-- **Componentes similares** (Modal, Button, Form, etc.)
-- **Hooks e services** já implementados
-- **Padrões de imports** mais utilizados
-- **Estruturas de código** existentes
-- **Padrões de estilização** e validação
-
-**Exemplo:** Se você pedir para criar um modal, ele vai:
-1. Procurar modais existentes no projeto
-2. Identificar o padrão usado (styled-components, CSS modules, etc.)
-3. Orientar o Copilot a seguir o mesmo padrão
-
-## 📋 Linguagens suportadas
-
-| Linguagem | Camadas | Pastas padrão |
-|-----------|---------|---------------|
-| **JavaScript/TypeScript** | domain, application, infrastructure | src, test, dist |
-| **Python** | domain, application, infrastructure, adapters | src, tests, app |
-| **Java** | domain, application, infrastructure, presentation | src/main/java, src/test/java |
-| **C#** | Domain, Application, Infrastructure, Presentation | src, tests |
-| **Go** | domain, application, infrastructure, interfaces | cmd, internal, pkg |
-| **Rust** | domain, application, infrastructure, adapters | src, tests |
-| **PHP** | Domain, Application, Infrastructure, Presentation | src, tests |
-
-## 🔄 Uso
-
-Após configurar, o GitHub Copilot Chat irá automaticamente:
-- Analisar padrões existentes no projeto
-- Sugerir reutilização de componentes similares  
-- Manter consistência com o código existente
-
-**Teste manual:**
+### Workflow recomendado:
 ```
-@mcp-project-guard analyze this project
+1. @mcp-project-guard analyze_architecture
+2. @mcp-project-guard find_similar_code component_type:modal
+3. [Agora o Copilot tem contexto completo para gerar código]
 ```
 
-**Para componentes específicos:**
+### Exemplos práticos:
+
+**Para criar um modal:**
 ```
-Crie um modal seguindo os padrões do projeto
+@mcp-project-guard find_similar_code component_type:modal
+Crie um modal para exibir detalhes do usuário
+```
+
+**Para criar uma API:**
+```
+@mcp-project-guard find_similar_code component_type:api search_term:fetch
+Como criar uma nova rota de API?
+```
+
+**Para criar um formulário:**
+```
+@mcp-project-guard find_similar_code component_type:form
+Preciso de um formulário de cadastro
+```
+
+**Análise geral:**
+```
+@mcp-project-guard analyze_architecture
+Qual a estrutura recomendada para este projeto?
+```
+
+## 🔍 Verificar uso
+
+```bash
+npx mcp-check-usage
 ```
 
 ---

@@ -8,6 +8,32 @@ import {
 import fs from "fs";
 import path from "path";
 
+function logUsage(action, details = {}) {
+    const timestamp = new Date().toISOString();
+    const logEntry = {
+        timestamp,
+        action,
+        pid: process.pid,
+        cwd: process.cwd(),
+        ...details
+    };
+    
+    const logDir = path.join(process.cwd(), '.mcp-logs');
+    if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir, { recursive: true });
+    }
+    
+    const logFile = path.join(logDir, `mcp-usage-${new Date().toISOString().split('T')[0]}.log`);
+    const logLine = JSON.stringify(logEntry) + '\n';
+    
+    try {
+        fs.appendFileSync(logFile, logLine);
+        console.error(`[MCP-LOG] ${timestamp} - ${action} - ${JSON.stringify(details)}`);
+    } catch (error) {
+        console.error(`[MCP-ERROR] Failed to write log: ${error.message}`);
+    }
+}
+
 function analyzeExistingPatterns(projectPath) {
     const patterns = {
         components: [],
@@ -364,14 +390,38 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
-        name: "project_guard",
-        description: "Analyze project architecture and return validation rules",
+        name: "analyze_architecture",
+        description: "Analyze project architecture, detect language, and return validation rules",
         inputSchema: {
           type: "object",
           properties: {
             path: {
               type: "string",
               description: "Project path to analyze",
+              default: process.cwd()
+            }
+          }
+        }
+      },
+      {
+        name: "find_similar_code",
+        description: "Find existing similar components, functions, or patterns in the project",
+        inputSchema: {
+          type: "object",
+          properties: {
+            component_type: {
+              type: "string",
+              description: "Type of component/code to find (e.g., 'modal', 'button', 'api', 'form', 'service')",
+              default: "component"
+            },
+            search_term: {
+              type: "string",
+              description: "Specific term to search for in code (optional)",
+              default: ""
+            },
+            path: {
+              type: "string",
+              description: "Project path to search in",
               default: process.cwd()
             }
           }
@@ -384,12 +434,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   
-  if (name === "project_guard") {
+  if (name === "analyze_architecture") {
     const projectPath = args?.path || process.cwd();
-    const requestedComponent = args?.component || 'component';
-    const architecture = analyzeArchitecture(projectPath);
     
-    const patternGuidance = generatePatternGuidance(architecture.existingPatterns, requestedComponent);
+    logUsage('ARCHITECTURE_ANALYZED', {
+      tool: name,
+      projectPath,
+      message: 'analyze_architecture tool was called'
+    });
+    
+    const architecture = analyzeArchitecture(projectPath);
+
+    logUsage('ARCHITECTURE_COMPLETE', {
+      detectedLanguage: architecture.detectedLanguage,
+      componentsFound: architecture.existingPatterns.components.length,
+      message: 'Architecture analysis completed'
+    });
 
     return {
       content: [
@@ -397,17 +457,104 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           type: "text",
           text: JSON.stringify({
             summary: architecture,
-            instructions: `You must generate code following these rules:
+            instructions: `ARCHITECTURE RULES FOR ${architecture.detectedLanguage.toUpperCase()} PROJECT:
     - Use only layers: ${architecture.layers.join(", ")}
     - Respect folder structure: ${architecture.folderPattern.join(", ")}
     - Do not create files outside these folders
     - Language: ${architecture.allowedLanguages.join(", ")}
-    - Follow conventions already present in the existing code.
+    - Follow conventions already present in the existing code
     
-    IMPORTANT: Always look for similar existing components before creating new ones!
-    ${patternGuidance}
+    PROJECT OVERVIEW:
+    - Detected ${architecture.existingPatterns.components.length} existing components
+    - Found ${architecture.existingPatterns.patterns.length} code patterns
+    - Project uses ${architecture.detectedLanguage} with ${architecture.layers.length} architectural layers
     
-    => Before creating anything new, check if there are similar patterns in the project and follow the same approach!`
+    NEXT STEP: Use find_similar_code tool to search for existing patterns before creating new code.`
+          }, null, 2)
+        }
+      ]
+    };
+  }
+  else if (name === "find_similar_code") {
+    const projectPath = args?.path || process.cwd();
+    const componentType = args?.component_type || 'component';
+    const searchTerm = args?.search_term || '';
+    
+    logUsage('SIMILAR_CODE_SEARCH', {
+      tool: name,
+      projectPath,
+      componentType,
+      searchTerm,
+      message: 'find_similar_code tool was called'
+    });
+    
+    const similarResults = findSimilarCode(projectPath, componentType, searchTerm);
+
+    logUsage('SIMILAR_CODE_COMPLETE', {
+      exactMatches: similarResults.exactMatches.length,
+      similarMatches: similarResults.similarMatches.length,
+      patternsFound: similarResults.patterns.length,
+      message: 'Similar code search completed'
+    });
+
+    let guidance = `=== SIMILAR CODE ANALYSIS ===\n\n`;
+    
+    if (similarResults.exactMatches.length > 0) {
+        guidance += `🎯 EXACT MATCHES (${similarResults.exactMatches.length}):\n`;
+        similarResults.exactMatches.forEach(match => {
+            guidance += `- ${match.file}\n`;
+            if (match.snippet) {
+                guidance += `  Code preview:\n${match.snippet.substring(0, 200)}...\n\n`;
+            }
+        });
+    }
+    
+    if (similarResults.similarMatches.length > 0) {
+        guidance += `🔍 SIMILAR MATCHES (${similarResults.similarMatches.length}):\n`;
+        similarResults.similarMatches.forEach(match => {
+            guidance += `- ${match.file} (search: "${match.searchTerm}")\n`;
+        });
+        guidance += `\n`;
+    }
+    
+    if (similarResults.imports.length > 0) {
+        guidance += `📦 RELEVANT IMPORTS:\n`;
+        const uniqueImports = [...new Set(similarResults.imports.map(i => i.import))];
+        uniqueImports.slice(0, 5).forEach(imp => {
+            guidance += `- ${imp}\n`;
+        });
+        guidance += `\n`;
+    }
+    
+    if (similarResults.patterns.length > 0) {
+        guidance += `🛠️ CODE PATTERNS DETECTED:\n`;
+        similarResults.patterns.forEach(pattern => {
+            guidance += `- ${pattern.pattern} in ${pattern.file}\n`;
+        });
+        guidance += `\n`;
+    }
+    
+    if (similarResults.exactMatches.length === 0 && similarResults.similarMatches.length === 0) {
+        guidance += `❌ NO SIMILAR CODE FOUND\n`;
+        guidance += `Consider creating a new ${componentType} following the project's architecture.\n\n`;
+    } else {
+        guidance += `✅ RECOMMENDATION:\n`;
+        guidance += `Follow the patterns found above when creating your new ${componentType}.\n`;
+        guidance += `Reuse imports, structure, and coding style from existing similar components.\n\n`;
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            componentType,
+            searchTerm,
+            exactMatches: similarResults.exactMatches.length,
+            similarMatches: similarResults.similarMatches.length,
+            patterns: similarResults.patterns.length,
+            guidance,
+            results: similarResults
           }, null, 2)
         }
       ]
@@ -416,6 +563,179 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   
   throw new Error(`Unknown tool: ${name}`);
 });
+
+function findSimilarCode(projectPath, componentType, searchTerm = '') {
+    const results = {
+        exactMatches: [],
+        similarMatches: [],
+        codeExamples: [],
+        imports: [],
+        patterns: []
+    };
+
+    try {
+        const allFiles = getAllFiles(projectPath);
+        const codeFiles = allFiles.filter(file => {
+            const ext = path.extname(file).toLowerCase();
+            return ['.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cs', '.go', '.rs', '.php'].includes(ext);
+        });
+
+        codeFiles.forEach(filePath => {
+            try {
+                const content = fs.readFileSync(filePath, 'utf8');
+                const relativePath = path.relative(projectPath, filePath);
+                const lowerContent = content.toLowerCase();
+                const fileName = path.basename(filePath).toLowerCase();
+                
+                if (fileName.includes(componentType.toLowerCase()) || 
+                    lowerContent.includes(componentType.toLowerCase())) {
+                    
+                    const codeSnippet = extractRelevantCode(content, componentType);
+                    results.exactMatches.push({
+                        file: relativePath,
+                        type: componentType,
+                        snippet: codeSnippet,
+                        score: 100
+                    });
+                }
+                
+                if (searchTerm && lowerContent.includes(searchTerm.toLowerCase())) {
+                    const codeSnippet = extractCodeAroundTerm(content, searchTerm);
+                    results.similarMatches.push({
+                        file: relativePath,
+                        searchTerm,
+                        snippet: codeSnippet,
+                        score: 80
+                    });
+                }
+                
+                const imports = extractRelevantImports(content, componentType);
+                results.imports.push(...imports.map(imp => ({
+                    import: imp,
+                    file: relativePath
+                })));
+                
+                const patterns = detectCodePatterns(content, componentType);
+                results.patterns.push(...patterns.map(pattern => ({
+                    ...pattern,
+                    file: relativePath
+                })));
+
+            } catch (error) {
+                
+            }
+        });
+
+    } catch (error) {
+        
+    }
+
+    return results;
+}
+
+function extractRelevantCode(content, componentType) {
+    const lines = content.split('\n');
+    const relevantLines = [];
+    let capturing = false;
+    let braceCount = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const lowerLine = line.toLowerCase();
+        
+        if (lowerLine.includes(componentType.toLowerCase()) && 
+            (lowerLine.includes('function') || lowerLine.includes('class') || lowerLine.includes('const'))) {
+            capturing = true;
+            relevantLines.push(line);
+            braceCount = (line.match(/{/g) || []).length - (line.match(/}/g) || []).length;
+            continue;
+        }
+        
+        if (capturing) {
+            relevantLines.push(line);
+            braceCount += (line.match(/{/g) || []).length - (line.match(/}/g) || []).length;
+            
+            if (braceCount <= 0 && relevantLines.length > 1) {
+                break;
+            }
+        }
+        
+        if (relevantLines.length > 50) break;
+    }
+    
+    return relevantLines.slice(0, 30).join('\n');
+}
+
+function extractCodeAroundTerm(content, searchTerm) {
+    const lines = content.split('\n');
+    const termIndex = lines.findIndex(line => 
+        line.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    
+    if (termIndex === -1) return '';
+    
+    const start = Math.max(0, termIndex - 5);
+    const end = Math.min(lines.length, termIndex + 10);
+    
+    return lines.slice(start, end).join('\n');
+}
+
+function extractRelevantImports(content, componentType) {
+    const importRegex = /import\s+.*?from\s+['"]([^'"]+)['"]/g;
+    const imports = [];
+    let match;
+    
+    while ((match = importRegex.exec(content)) !== null) {
+        const importPath = match[1];
+        const fullImport = match[0];
+        
+        if (importPath.toLowerCase().includes(componentType.toLowerCase()) ||
+            fullImport.toLowerCase().includes(componentType.toLowerCase()) ||
+            componentType === 'modal' && (importPath.includes('dialog') || importPath.includes('popup')) ||
+            componentType === 'button' && importPath.includes('btn') ||
+            componentType === 'form' && importPath.includes('input')) {
+            imports.push(fullImport);
+        }
+    }
+    
+    return imports;
+}
+
+function detectCodePatterns(content, componentType) {
+    const patterns = [];
+    
+    if (componentType === 'modal') {
+        if (content.includes('createPortal')) {
+            patterns.push({ type: 'portal', pattern: 'React Portal usage detected' });
+        }
+        if (content.includes('useEffect') && content.includes('escape')) {
+            patterns.push({ type: 'keyboard', pattern: 'Escape key handling detected' });
+        }
+        if (content.includes('backdrop') || content.includes('overlay')) {
+            patterns.push({ type: 'backdrop', pattern: 'Backdrop/overlay pattern detected' });
+        }
+    }
+    
+    if (componentType === 'form') {
+        if (content.includes('useForm') || content.includes('react-hook-form')) {
+            patterns.push({ type: 'form-library', pattern: 'React Hook Form detected' });
+        }
+        if (content.includes('yup') || content.includes('joi') || content.includes('zod')) {
+            patterns.push({ type: 'validation', pattern: 'Schema validation detected' });
+        }
+    }
+    
+    if (componentType === 'api' || componentType === 'service') {
+        if (content.includes('axios')) {
+            patterns.push({ type: 'http-client', pattern: 'Axios HTTP client detected' });
+        }
+        if (content.includes('fetch')) {
+            patterns.push({ type: 'fetch-api', pattern: 'Fetch API detected' });
+        }
+    }
+    
+    return patterns;
+}
 
 async function main() {
   const transport = new StdioServerTransport();
